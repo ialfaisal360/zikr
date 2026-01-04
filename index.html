@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>عداد الأذكار Whisper Web كامل</title>
+<title>عداد الأذكار Whisper Web سريع</title>
 <style>
 body{font-family:Arial;text-align:center;padding:15px;background:#f4f6f8;direction:rtl;}
 #progressContainer{width:100%;height:20px;background:#ddd;border-radius:10px;margin:10px 0;}
@@ -21,7 +21,7 @@ input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin:5px
 </head>
 <body>
 
-<h2>🎤 عداد الأذكار Whisper Web</h2>
+<h2>🎤 عداد الأذكار Whisper Web سريع</h2>
 
 <div id="progressContainer"><div id="progressBar"></div></div>
 <p id="status">تحميل نموذج الصوت...</p>
@@ -37,7 +37,7 @@ input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin:5px
 <button class="add-btn" id="addBtn">➕ إضافة ذكر</button>
 
 <script type="module">
-import * as whisperWeb from "https://cdn.jsdelivr.net/npm/@xenova/whisper-web/dist/whisper-web.min.js";
+import * as whisperWeb from "./model/whisper-web.min.js"; // النسخة المحلية
 
 // ========== تحميل نموذج Whisper ==========
 let model;
@@ -46,7 +46,7 @@ const statusText = document.getElementById("status");
 
 async function loadModel(){
   try{
-    model = await whisperWeb.Whisper.loadModel("tiny",{
+    model = await whisperWeb.Whisper.loadModel("./model/tiny/",{
       progressCallback:(p)=>{
         progressBar.style.width = Math.floor(p*100) + "%";
         statusText.innerText = "تحميل النموذج: " + Math.floor(p*100) + "%";
@@ -57,7 +57,7 @@ async function loadModel(){
     document.getElementById("stop").disabled = false;
   }catch(e){
     console.error(e);
-    statusText.innerText = "خطأ في تحميل النموذج، تحقق من اتصال الإنترنت والمتصفح";
+    statusText.innerText = "خطأ في تحميل النموذج، تحقق من رفع ملفات النموذج.";
   }
 }
 loadModel();
