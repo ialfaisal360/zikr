@@ -6,9 +6,7 @@
 <title>عداد الأذكار الصوتي</title>
 
 <style>
-:root {
-  --main:#2c7be5; --bg:#f4f6f8; --card:#fff; --flash:#d1f5e0;
-}
+:root {--main:#2c7be5;--bg:#f4f6f8;--card:#fff;--flash:#d1f5e0;}
 body{margin:0;padding:15px;font-family:Arial;background:var(--bg);direction:rtl;text-align:center}
 h2{margin-bottom:15px}
 button{padding:12px;font-size:16px;border-radius:12px;border:none;margin:5px;cursor:pointer}
@@ -43,8 +41,7 @@ input{width:100%;padding:10px;border-radius:10px;border:1px solid #ccc;margin-bo
 <script>
 // ========= أدوات =========
 function normalize(t){return t.replace(/[ًٌٍَُِّْ]/g,"").replace(/\s+/g," ").trim();}
-function countOccurrences(text, phrase){return text.split(phrase).length-1;}
-function createZikr(text){const words=text.split(" ");const key=words.slice(0,Math.ceil(words.length/2)).join(" ");return { text,key,total:0,lastCount:0 };}
+function createZikr(text){const words=text.split(" ");const key=words.slice(0,Math.ceil(words.length/2)).join(" ");return { text,key,total:0 };}
 
 // ========= البيانات =========
 let zikrData=[createZikr("استغفر الله"),createZikr("الحمد لله"),createZikr("سبحان الله"),createZikr("لا حول ولا قوة إلا بالله")];
@@ -58,10 +55,14 @@ function render(){
 }
 render();
 
+// تحديث عدد معين
+function renderCount(i){ document.getElementById(`count-${i}`).textContent=zikrData[i].total; }
+
 // ========= إضافة ذكر =========
 document.getElementById("addBtn").onclick=function(){
   const v=document.getElementById("newZikr").value.trim();
-  if(!v) return; zikrData.push(createZikr(v)); document.getElementById("newZikr").value=""; render();
+  if(!v) return;
+  zikrData.push(createZikr(v)); document.getElementById("newZikr").value=""; render();
 }
 
 // ========= التعرف على الصوت =========
@@ -75,21 +76,21 @@ function initRecognition(){
   recognition.interimResults=true;
 
   recognition.onresult=function(e){
-    let text="";
-    for(let i=0;i<e.results.length;i++) text+=e.results[i][0].transcript+" ";
-    text=normalize(text); document.getElementById("heard").textContent="سمعت: "+text;
+    for(let i=0;i<e.results.length;i++){
+      const result=e.results[i];
+      if(!result.isFinal) continue; // ✅ عد فقط النتائج النهائية
+      const text=normalize(result[0].transcript);
+      document.getElementById("heard").textContent="سمعت: "+text;
 
-    zikrData.forEach((z,i)=>{
-      const current=countOccurrences(text,z.key);
-      if(current>z.lastCount){
-        const diff=current-z.lastCount;
-        z.total+=diff; z.lastCount=current;
-        document.getElementById(`count-${i}`).textContent=z.total;
-        flash(i);
-      }
-    });
+      zikrData.forEach((z,j)=>{
+        if(text.includes(z.key)){
+          z.total++; flash(j); renderCount(j);
+        }
+      });
+    }
   }
-  recognition.onerror=function(err){console.log("Error:",err);}
+
+  recognition.onerror=function(err){ console.log("Error:",err); }
 }
 
 // ========= تنبيه بصري =========
