@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>عداد الأذكار بـ Whisper Web</title>
+<title>عداد الأذكار Whisper Web كامل</title>
 <style>
-body{font-family:Arial; text-align:center; padding:15px; background:#f4f6f8; direction:rtl;}
+body{font-family:Arial;text-align:center;padding:15px;background:#f4f6f8;direction:rtl;}
 #progressContainer{width:100%;height:20px;background:#ddd;border-radius:10px;margin:10px 0;}
 #progressBar{height:100%;width:0%;background:#2c7be5;border-radius:10px;}
 button{padding:12px 18px;font-size:16px;margin:5px;border:none;border-radius:8px;cursor:pointer;}
@@ -21,10 +21,10 @@ input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin:5px
 </head>
 <body>
 
-<h2>🎤 عداد الأذكار (Whisper Web)</h2>
+<h2>🎤 عداد الأذكار Whisper Web</h2>
 
 <div id="progressContainer"><div id="progressBar"></div></div>
-<p id="status">يتم تحميل النموذج...</p>
+<p id="status">تحميل نموذج الصوت...</p>
 
 <button id="start" disabled>ابدأ</button>
 <button id="stop" disabled>إيقاف</button>
@@ -39,29 +39,30 @@ input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin:5px
 <script type="module">
 import * as whisperWeb from "https://cdn.jsdelivr.net/npm/@xenova/whisper-web/dist/whisper-web.min.js";
 
+// ========== تحميل نموذج Whisper ==========
 let model;
-
-// Show loading progress
 const progressBar = document.getElementById("progressBar");
 const statusText = document.getElementById("status");
 
-async function loadModel() {
-  model = await whisperWeb.Whisper.loadModel("tiny", {
-    progressCallback: (p) => {
-      progressBar.style.width = Math.floor(p * 100) + "%";
-      statusText.innerText = "تحميل النموذج: " + Math.floor(p * 100) + "%";
-    }
-  });
-
-  statusText.innerText = "جاهز للاستماع 🎤";
-  document.getElementById("start").disabled = false;
-  document.getElementById("stop").disabled = false;
+async function loadModel(){
+  try{
+    model = await whisperWeb.Whisper.loadModel("tiny",{
+      progressCallback:(p)=>{
+        progressBar.style.width = Math.floor(p*100) + "%";
+        statusText.innerText = "تحميل النموذج: " + Math.floor(p*100) + "%";
+      }
+    });
+    statusText.innerText = "جاهز للاستماع 🎤";
+    document.getElementById("start").disabled = false;
+    document.getElementById("stop").disabled = false;
+  }catch(e){
+    console.error(e);
+    statusText.innerText = "خطأ في تحميل النموذج، تحقق من اتصال الإنترنت والمتصفح";
+  }
 }
 loadModel();
 
-/* =======================
-   بيانات الأذكار
-========================= */
+// ========== بيانات الأذكار ==========
 let zikrData = [
   { text: "استغفر الله", count:0 },
   { text: "الحمد لله", count:0 },
@@ -80,15 +81,10 @@ renderList();
 
 document.getElementById("addBtn").onclick = () => {
   const val = document.getElementById("newZikr").value.trim();
-  if(val){ zikrData.push({ text:val, count:0 }); 
-    document.getElementById("newZikr").value="";
-    renderList();
-  }
+  if(val){ zikrData.push({text:val,count:0}); document.getElementById("newZikr").value=""; renderList();}
 };
 
-/* ================
-   المايكوامواج صوت
-================== */
+// ========== أمواج صوت ==========
 let audioCtx, analyser, dataArr, source, micStream;
 const canvas = document.getElementById("wave");
 const ctx = canvas.getContext("2d");
@@ -99,24 +95,23 @@ function drawWave(){
   analyser.getByteTimeDomainData(dataArr);
   ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.strokeStyle="#00ffcc"; ctx.beginPath();
-  let slice = canvas.width / dataArr.length;
-  let x = 0;
+  let slice = canvas.width/dataArr.length;
+  let x=0;
   for(let i=0;i<dataArr.length;i++){
-    let y = (dataArr[i]/128)*canvas.height/2;
+    let y=(dataArr[i]/128)*canvas.height/2;
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
     x+=slice;
   }
   ctx.stroke();
 }
 
-/* ===================
-   تشغيل التسجيل عبر نموذج Whisper
-===================== */
+// ========== تشغيل التسجيل ==========
 let isRecording = false;
 let audioChunks = [];
 
 document.getElementById("start").onclick = async () => {
-  micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
+  if(!model) return alert("النموذج لم يكتمل تحميله بعد!");
+  micStream = await navigator.mediaDevices.getUserMedia({audio:true});
   audioCtx = new AudioContext();
   source = audioCtx.createMediaStreamSource(micStream);
   analyser = audioCtx.createAnalyser();
@@ -132,16 +127,16 @@ document.getElementById("start").onclick = async () => {
   const recorder = new MediaRecorder(micStream);
   recorder.ondataavailable = e => audioChunks.push(e.data);
   recorder.start();
-  
+
   recorder.onstop = async () => {
-    const audioBlob = new Blob(audioChunks, { type:"audio/webm" });
+    const audioBlob = new Blob(audioChunks,{type:"audio/webm"});
     const arrayBuffer = await audioBlob.arrayBuffer();
-    // تحويل الصوت إلى نص باستخدام Whisper Web
     const result = await model.transcribe(arrayBuffer);
     const text = result.text.trim();
     statusText.innerText = "سمعت: "+text;
-    // تحديث العدّادات
-    zikrData.forEach((z,i) => {
+
+    // تحديث العدادات
+    zikrData.forEach((z,i)=>{
       const regex = new RegExp("\\b" + z.text.replace(/[.*+?^${}()|[\\]\/]/g,"\\\\$&") + "\\b","gi");
       const matches = text.match(regex);
       if(matches){
@@ -153,17 +148,16 @@ document.getElementById("start").onclick = async () => {
     });
   };
 
-  setTimeout(()=> recorder.stop(), 3000); // تسجيل 3 ثوانٍ فقط
+  setTimeout(()=>recorder.stop(),3000); // تسجيل 3 ثواني
 };
 
 document.getElementById("stop").onclick = () => {
   if(micStream){
-    micStream.getTracks().forEach(t => t.stop());
+    micStream.getTracks().forEach(t=>t.stop());
     audioCtx && audioCtx.close();
     statusText.innerText = "تم الإيقاف";
   }
 };
 </script>
-
 </body>
 </html>
