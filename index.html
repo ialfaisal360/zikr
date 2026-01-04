@@ -3,27 +3,28 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>عداد الأذكار الصوتي بـ Whisper</title>
+<title>عداد الأذكار بـ Whisper Web</title>
 <style>
-body { font-family: Arial; text-align:center; padding:20px; background:#f4f6f8; }
-button { padding:12px 18px; font-size:16px; margin:5px; border:none; border-radius:8px; cursor:pointer; }
-#start {background:#2c7be5; color:white;}
-#stop {background:#dc3545; color:white;}
-canvas {width:100%; height:80px; background:#000; border-radius:8px; margin:10px 0;}
-.card {background:#fff; padding:12px; margin:8px 0; border-radius:10px; display:flex; justify-content:space-between; box-shadow:0 4px 8px rgba(0,0,0,0.1); transition:.3s;}
-.card.flash {background:#d1f5e0; transform: scale(1.03);}
-.count {font-weight:bold; color:#2c7be5;}
-input {width:100%; padding:10px; border-radius:8px; border:1px solid #ccc; margin:5px 0;}
-#progressContainer {width:100%; background:#ccc; border-radius:10px; margin:10px 0; height:20px;}
-#progressBar {width:0%; height:100%; background:#2c7be5; border-radius:10px;}
+body{font-family:Arial; text-align:center; padding:15px; background:#f4f6f8; direction:rtl;}
+#progressContainer{width:100%;height:20px;background:#ddd;border-radius:10px;margin:10px 0;}
+#progressBar{height:100%;width:0%;background:#2c7be5;border-radius:10px;}
+button{padding:12px 18px;font-size:16px;margin:5px;border:none;border-radius:8px;cursor:pointer;}
+#start{background:#2c7be5;color:#fff;}
+#stop{background:#dc3545;color:#fff;}
+canvas{width:100%;height:80px;background:#000;border-radius:8px;margin:10px 0;}
+.card{background:#fff;padding:10px;margin:8px 0;border-radius:10px;display:flex;justify-content:space-between;box-shadow:0 4px 8px rgba(0,0,0,0.1);}
+.card.flash{background:#d1f5e0;transform:scale(1.03);}
+.count{font-weight:bold;color:#2c7be5;}
+input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin:5px 0;}
+.add-btn{width:100%;padding:10px;border:none;border-radius:8px;background:#28a745;color:#fff;}
 </style>
 </head>
 <body>
 
-<h2>🎤 عداد الأذكار بـ Whisper (بدون سيرفر)</h2>
+<h2>🎤 عداد الأذكار (Whisper Web)</h2>
 
 <div id="progressContainer"><div id="progressBar"></div></div>
-<p id="status">تحميل نموذج الصوت...</p>
+<p id="status">يتم تحميل النموذج...</p>
 
 <button id="start" disabled>ابدأ</button>
 <button id="stop" disabled>إيقاف</button>
@@ -33,113 +34,134 @@ input {width:100%; padding:10px; border-radius:8px; border:1px solid #ccc; margi
 <div id="zikrList"></div>
 
 <input id="newZikr" placeholder="أدخل الذكر أو الدعاء">
-<button id="addZikrBtn" style="background:#28a745; color:white;">➕ إضافة ذكر</button>
+<button class="add-btn" id="addBtn">➕ إضافة ذكر</button>
 
-<script src="https://unpkg.com/whisper-web-transcriber/dist/index.bundled.min.js"></script>
-<script>
-// ===== بيانات الأذكار =====
+<script type="module">
+import * as whisperWeb from "https://cdn.jsdelivr.net/npm/@xenova/whisper-web/dist/whisper-web.min.js";
+
+let model;
+
+// Show loading progress
+const progressBar = document.getElementById("progressBar");
+const statusText = document.getElementById("status");
+
+async function loadModel() {
+  model = await whisperWeb.Whisper.loadModel("tiny", {
+    progressCallback: (p) => {
+      progressBar.style.width = Math.floor(p * 100) + "%";
+      statusText.innerText = "تحميل النموذج: " + Math.floor(p * 100) + "%";
+    }
+  });
+
+  statusText.innerText = "جاهز للاستماع 🎤";
+  document.getElementById("start").disabled = false;
+  document.getElementById("stop").disabled = false;
+}
+loadModel();
+
+/* =======================
+   بيانات الأذكار
+========================= */
 let zikrData = [
-  { text: "استغفر الله", count: 0 },
-  { text: "الحمد لله", count: 0 },
-  { text: "سبحان الله", count: 0 },
+  { text: "استغفر الله", count:0 },
+  { text: "الحمد لله", count:0 },
+  { text: "سبحان الله", count:0 },
   { text: "لا حول ولا قوة إلا بالله", count:0 }
 ];
 
-function render() {
-  const container = document.getElementById("zikrList");
-  container.innerHTML = "";
-  zikrData.forEach((z,i) => {
-    container.innerHTML += `<div id="card${i}" class="card"><span>${z.text}</span><span class="count" id="count${i}">${z.count}</span></div>`;
+function renderList(){
+  const box = document.getElementById("zikrList");
+  box.innerHTML = "";
+  zikrData.forEach((z,i)=>{
+    box.innerHTML += `<div id="card-${i}" class="card"><span>${z.text}</span><span class="count" id="count-${i}">${z.count}</span></div>`;
   });
 }
-render();
+renderList();
 
-document.getElementById("addZikrBtn").onclick = () => {
-  const v = document.getElementById("newZikr").value.trim();
-  if(v){ zikrData.push({text:v,count:0}); render(); document.getElementById("newZikr").value=""; }
+document.getElementById("addBtn").onclick = () => {
+  const val = document.getElementById("newZikr").value.trim();
+  if(val){ zikrData.push({ text:val, count:0 }); 
+    document.getElementById("newZikr").value="";
+    renderList();
+  }
 };
 
-// ===== أمواج صوت =====
-let audioCtx, analyser, dataArray, source, stream;
+/* ================
+   المايكوامواج صوت
+================== */
+let audioCtx, analyser, dataArr, source, micStream;
 const canvas = document.getElementById("wave");
 const ctx = canvas.getContext("2d");
 
 function drawWave(){
   requestAnimationFrame(drawWave);
   if(!analyser) return;
-  analyser.getByteTimeDomainData(dataArray);
+  analyser.getByteTimeDomainData(dataArr);
   ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
   ctx.strokeStyle="#00ffcc"; ctx.beginPath();
-  let slice = canvas.width / dataArray.length;
+  let slice = canvas.width / dataArr.length;
   let x = 0;
-  for(let i=0; i<dataArray.length; i++){
-    let y = (dataArray[i]/128)*canvas.height/2;
+  for(let i=0;i<dataArr.length;i++){
+    let y = (dataArr[i]/128)*canvas.height/2;
     i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-    x += slice;
+    x+=slice;
   }
   ctx.stroke();
 }
 
-// ===== Whisper Transcriber =====
-let transcriber;
+/* ===================
+   تشغيل التسجيل عبر نموذج Whisper
+===================== */
+let isRecording = false;
+let audioChunks = [];
 
-async function initWhisper(){
-  transcriber = new whisperWebTranscriber.WhisperTranscriber({
-    modelSize: "tiny",
-    onTranscription: (txt) => {
-      document.getElementById("status").innerText="سمعت: "+txt;
-      zikrData.forEach((z,i) => {
-        const regex = new RegExp(`\\b${z.text.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\b`, "gi");
-        const matches = txt.match(regex);
-        if(matches){
-          z.count += matches.length;
-          document.getElementById(`count${i}`).innerText = z.count;
-          const card = document.getElementById(`card${i}`);
-          card.classList.add("flash");
-          setTimeout(()=>card.classList.remove("flash"),300);
-        }
-      });
-    }
-  });
-
-  // ===== شريط تقدم وهمي =====
-  let progress = 0;
-  const progressBar = document.getElementById("progressBar");
-  const fakeProgress = setInterval(()=>{
-    if(progress < 90){
-      progress += Math.random()*3; // زيادة تدريجية عشوائية
-      progressBar.style.width = Math.floor(progress)+"%";
-    }
-  },100);
-
-  await transcriber.loadModel(); // تحميل النموذج
-
-  clearInterval(fakeProgress);
-  progressBar.style.width = "100%";
-  document.getElementById("status").innerText="جاهز للاستماع 🎤";
-  document.getElementById("start").disabled = false;
-  document.getElementById("stop").disabled = false;
-}
-
-initWhisper();
-
-// ===== التحكم بالمايك =====
 document.getElementById("start").onclick = async () => {
+  micStream = await navigator.mediaDevices.getUserMedia({ audio:true });
   audioCtx = new AudioContext();
-  stream = await navigator.mediaDevices.getUserMedia({audio:true});
-  source = audioCtx.createMediaStreamSource(stream);
+  source = audioCtx.createMediaStreamSource(micStream);
   analyser = audioCtx.createAnalyser();
   analyser.fftSize = 2048;
-  dataArray = new Uint8Array(analyser.fftSize);
+  dataArr = new Uint8Array(analyser.fftSize);
   source.connect(analyser);
   drawWave();
-  transcriber.startRecording(); 
+
+  statusText.innerText = "جاري التسجيل...";
+  isRecording = true;
+  audioChunks = [];
+
+  const recorder = new MediaRecorder(micStream);
+  recorder.ondataavailable = e => audioChunks.push(e.data);
+  recorder.start();
+  
+  recorder.onstop = async () => {
+    const audioBlob = new Blob(audioChunks, { type:"audio/webm" });
+    const arrayBuffer = await audioBlob.arrayBuffer();
+    // تحويل الصوت إلى نص باستخدام Whisper Web
+    const result = await model.transcribe(arrayBuffer);
+    const text = result.text.trim();
+    statusText.innerText = "سمعت: "+text;
+    // تحديث العدّادات
+    zikrData.forEach((z,i) => {
+      const regex = new RegExp("\\b" + z.text.replace(/[.*+?^${}()|[\\]\/]/g,"\\\\$&") + "\\b","gi");
+      const matches = text.match(regex);
+      if(matches){
+        z.count += matches.length;
+        document.getElementById(`count-${i}`).innerText = z.count;
+        document.getElementById(`card-${i}`).classList.add("flash");
+        setTimeout(()=>document.getElementById(`card-${i}`).classList.remove("flash"),300);
+      }
+    });
+  };
+
+  setTimeout(()=> recorder.stop(), 3000); // تسجيل 3 ثوانٍ فقط
 };
 
 document.getElementById("stop").onclick = () => {
-  transcriber && transcriber.stopRecording();
-  stream && stream.getTracks().forEach(t=>t.stop());
-  audioCtx && audioCtx.close();
+  if(micStream){
+    micStream.getTracks().forEach(t => t.stop());
+    audioCtx && audioCtx.close();
+    statusText.innerText = "تم الإيقاف";
+  }
 };
 </script>
 
