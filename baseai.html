@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>عداد الأذكار الصوتي بـ Whisper</title>
+<style>
+body { font-family: Arial; text-align:center; padding:20px; background:#f4f6f8; }
+button { padding:12px 18px; font-size:16px; margin:5px; border:none; border-radius:8px; cursor:pointer; }
+#start {background:#2c7be5; color:white;}
+#stop {background:#dc3545; color:white;}
+canvas {width:100%; height:80px; background:#000; border-radius:8px; margin:10px 0;}
+.card {background:#fff; padding:12px; margin:8px 0; border-radius:10px; display:flex; justify-content:space-between; box-shadow:0 4px 8px rgba(0,0,0,0.1); transition:.3s;}
+.card.flash {background:#d1f5e0; transform: scale(1.03);}
+.count {font-weight:bold; color:#2c7be5;}
+input {width:100%; padding:10px; border-radius:8px; border:1px solid #ccc; margin:5px 0;}
+#progressContainer {width:100%; background:#ccc; border-radius:10px; margin:10px 0; height:20px;}
+#progressBar {width:0%; height:100%; background:#2c7be5; border-radius:10px;}
+</style>
+</head>
+<body>
+
+<h2>🎤 عداد الأذكار بـ Whisper (بدون سيرفر)</h2>
+
+<div id="progressContainer"><div id="progressBar"></div></div>
+<p id="status">تحميل نموذج الصوت...</p>
+
+<button id="start" disabled>ابدأ</button>
+<button id="stop" disabled>إيقاف</button>
+
+<canvas id="wave"></canvas>
+
+<div id="zikrList"></div>
+
+<input id="newZikr" placeholder="أدخل الذكر أو الدعاء">
+<button id="addZikrBtn" style="background:#28a745; color:white;">➕ إضافة ذكر</button>
+
+<script src="https://unpkg.com/whisper-web-transcriber/dist/index.bundled.min.js"></script>
+<script>
+// ===== بيانات الأذكار =====
+let zikrData = [
+  { text: "استغفر الله", count: 0 },
+  { text: "الحمد لله", count: 0 },
+  { text: "سبحان الله", count: 0 },
+  { text: "لا حول ولا قوة إلا بالله", count:0 }
+];
+
+function render() {
+  const container = document.getElementById("zikrList");
+  container.innerHTML = "";
+  zikrData.forEach((z,i) => {
+    container.innerHTML += `<div id="card${i}" class="card"><span>${z.text}</span><span class="count" id="count${i}">${z.count}</span></div>`;
+  });
+}
+render();
+
+document.getElementById("addZikrBtn").onclick = () => {
+  const v = document.getElementById("newZikr").value.trim();
+  if(v){ zikrData.push({text:v,count:0}); render(); document.getElementById("newZikr").value=""; }
+};
+
+// ===== أمواج صوت =====
+let audioCtx, analyser, dataArray, source, stream;
+const canvas = document.getElementById("wave");
+const ctx = canvas.getContext("2d");
+
+function drawWave(){
+  requestAnimationFrame(drawWave);
+  if(!analyser) return;
+  analyser.getByteTimeDomainData(dataArray);
+  ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle="#00ffcc"; ctx.beginPath();
+  let slice = canvas.width / dataArray.length;
+  let x = 0;
+  for(let i=0; i<dataArray.length; i++){
+    let y = (dataArray[i]/128)*canvas.height/2;
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    x += slice;
+  }
+  ctx.stroke();
+}
+
+// ===== Whisper Transcriber =====
+let transcriber;
+
+async function initWhisper(){
+  transcriber = new whisperWebTranscriber.WhisperTranscriber({
+    modelSize: "tiny",
+    onTranscription: (txt) => {
+      document.getElementById("status").innerText="سمعت: "+txt;
+      zikrData.forEach((z,i) => {
+        const regex = new RegExp(`\\b${z.text.replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}\\b`, "gi");
+        const matches = txt.match(regex);
+        if(matches){
+          z.count += matches.length;
+          document.getElementById(`count${i}`).innerText = z.count;
+          const card = document.getElementById(`card${i}`);
+          card.classList.add("flash");
+          setTimeout(()=>card.classList.remove("flash"),300);
+        }
+      });
+    },
+    onProgress: (p) => {
+      const percent = Math.floor(p*100);
+      document.getElementById("progressBar").style.width = percent+"%";
+      document.getElementById("status").innerText = "تحميل النموذج: "+percent+"%";
+    }
+  });
+
+  await transcriber.loadModel(); // تحميل النموذج
+  document.getElementById("status").innerText="جاهز للاستماع 🎤";
+  document.getElementById("start").disabled = false;
+  document.getElementById("stop").disabled = false;
+}
+
+initWhisper();
+
+// ===== التحكم بالمايك =====
+document.getElementById("start").onclick = async () => {
+  audioCtx = new AudioContext();
+  stream = await navigator.mediaDevices.getUserMedia({audio:true});
+  source = audioCtx.createMediaStreamSource(stream);
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  dataArray = new Uint8Array(analyser.fftSize);
+  source.connect(analyser);
+  drawWave();
+  transcriber.startRecording(); 
+};
+
+document.getElementById("stop").onclick = () => {
+  transcriber && transcriber.stopRecording();
+  stream && stream.getTracks().forEach(t=>t.stop());
+  audioCtx && audioCtx.close();
+};
+</script>
+
+</body>
+</html>
