@@ -83,8 +83,12 @@ function initRecognition(){
       document.getElementById("heard").textContent="سمعت: "+text;
 
       zikrData.forEach((z,j)=>{
-        if(text.includes(z.key)){
-          z.total++; flash(j); renderCount(j);
+        // === تطابق ذكر كامل بالـ Regex لتجنب العد الزائد ===
+        const regex = new RegExp(`\\b${z.key.replace(/[-\/\\^$*+?.()|[\]{}]/g,'\\$&')}\\b`, "g");
+        const matches = text.match(regex);
+        if(matches){
+          z.total += matches.length;
+          flash(j); renderCount(j);
         }
       });
     }
