@@ -2,162 +2,127 @@
 <html lang="ar">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>عداد الأذكار Whisper Web سريع</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>عداد الأذكار الصوتي</title>
+
 <style>
-body{font-family:Arial;text-align:center;padding:15px;background:#f4f6f8;direction:rtl;}
-#progressContainer{width:100%;height:20px;background:#ddd;border-radius:10px;margin:10px 0;}
-#progressBar{height:100%;width:0%;background:#2c7be5;border-radius:10px;}
-button{padding:12px 18px;font-size:16px;margin:5px;border:none;border-radius:8px;cursor:pointer;}
-#start{background:#2c7be5;color:#fff;}
-#stop{background:#dc3545;color:#fff;}
-canvas{width:100%;height:80px;background:#000;border-radius:8px;margin:10px 0;}
-.card{background:#fff;padding:10px;margin:8px 0;border-radius:10px;display:flex;justify-content:space-between;box-shadow:0 4px 8px rgba(0,0,0,0.1);}
-.card.flash{background:#d1f5e0;transform:scale(1.03);}
-.count{font-weight:bold;color:#2c7be5;}
-input{width:100%;padding:10px;border-radius:8px;border:1px solid #ccc;margin:5px 0;}
-.add-btn{width:100%;padding:10px;border:none;border-radius:8px;background:#28a745;color:#fff;}
+:root {--main:#2c7be5;--bg:#f4f6f8;--card:#fff;--flash:#d1f5e0;}
+body{margin:0;padding:15px;font-family:Arial;background:var(--bg);direction:rtl;text-align:center}
+h2{margin-bottom:15px}
+button{padding:12px;font-size:16px;border-radius:12px;border:none;margin:5px;cursor:pointer}
+.start{background:var(--main);color:#fff}
+.stop{background:#dc3545;color:#fff}
+canvas{width:100%;height:80px;background:#000;border-radius:12px;margin:10px auto;display:block}
+.card{display:flex;justify-content:space-between;background:#fff;padding:10px;margin:5px;border-radius:12px;box-shadow:0 4px 6px rgba(0,0,0,0.1);transition:.3s}
+.card.flash{background:var(--flash);transform:scale(1.03)}
+.count{font-weight:bold;color:var(--main)}
+input{width:100%;padding:10px;border-radius:10px;border:1px solid #ccc;margin-bottom:5px}
+.add-btn{width:100%;padding:10px;border:none;border-radius:10px;background:#28a745;color:white}
 </style>
 </head>
 <body>
 
-<h2>🎤 عداد الأذكار Whisper Web سريع</h2>
+<h2>🎤 عداد الأذكار الصوتي</h2>
 
-<div id="progressContainer"><div id="progressBar"></div></div>
-<p id="status">تحميل نموذج الصوت...</p>
-
-<button id="start" disabled>ابدأ</button>
-<button id="stop" disabled>إيقاف</button>
+<button class="start" id="startBtn">ابدأ</button>
+<button class="stop" id="stopBtn">إيقاف</button>
 
 <canvas id="wave"></canvas>
 
 <div id="zikrList"></div>
 
-<input id="newZikr" placeholder="أدخل الذكر أو الدعاء">
-<button class="add-btn" id="addBtn">➕ إضافة ذكر</button>
+<div style="margin-top:15px;padding:10px;border:1px solid #ccc;border-radius:12px;">
+  <input id="newZikr" placeholder="أدخل الذكر أو الدعاء">
+  <button class="add-btn" id="addBtn">➕ إضافة</button>
+</div>
 
-<script type="module">
-import * as whisperWeb from "./model/whisper-web.min.js"; // النسخة المحلية
+<p id="heard" style="font-size:14px;color:#555;margin-top:10px;"></p>
 
-// ========== تحميل نموذج Whisper ==========
-let model;
-const progressBar = document.getElementById("progressBar");
-const statusText = document.getElementById("status");
+<script>
+// ========= أدوات =========
+function normalize(t){return t.replace(/[ًٌٍَُِّْ]/g,"").replace(/\s+/g," ").trim();}
+function createZikr(text){const words=text.split(" ");const key=words.slice(0,Math.ceil(words.length/2)).join(" ");return { text,key,total:0 };}
 
-async function loadModel(){
-  try{
-    model = await whisperWeb.Whisper.loadModel("./model/tiny/",{
-      progressCallback:(p)=>{
-        progressBar.style.width = Math.floor(p*100) + "%";
-        statusText.innerText = "تحميل النموذج: " + Math.floor(p*100) + "%";
-      }
-    });
-    statusText.innerText = "جاهز للاستماع 🎤";
-    document.getElementById("start").disabled = false;
-    document.getElementById("stop").disabled = false;
-  }catch(e){
-    console.error(e);
-    statusText.innerText = "خطأ في تحميل النموذج، تحقق من رفع ملفات النموذج.";
-  }
-}
-loadModel();
+// ========= البيانات =========
+let zikrData=[createZikr("استغفر الله"),createZikr("الحمد لله"),createZikr("سبحان الله"),createZikr("لا حول ولا قوة إلا بالله")];
 
-// ========== بيانات الأذكار ==========
-let zikrData = [
-  { text: "استغفر الله", count:0 },
-  { text: "الحمد لله", count:0 },
-  { text: "سبحان الله", count:0 },
-  { text: "لا حول ولا قوة إلا بالله", count:0 }
-];
-
-function renderList(){
-  const box = document.getElementById("zikrList");
-  box.innerHTML = "";
+// ========= عرض =========
+function render(){
+  const box=document.getElementById("zikrList"); box.innerHTML="";
   zikrData.forEach((z,i)=>{
-    box.innerHTML += `<div id="card-${i}" class="card"><span>${z.text}</span><span class="count" id="count-${i}">${z.count}</span></div>`;
+    box.innerHTML+=`<div id="card-${i}" class="card"><div>${z.text}</div><div id="count-${i}" class="count">${z.total}</div></div>`;
   });
 }
-renderList();
+render();
 
-document.getElementById("addBtn").onclick = () => {
-  const val = document.getElementById("newZikr").value.trim();
-  if(val){ zikrData.push({text:val,count:0}); document.getElementById("newZikr").value=""; renderList();}
-};
+// تحديث عدد معين
+function renderCount(i){ document.getElementById(`count-${i}`).textContent=zikrData[i].total; }
 
-// ========== أمواج صوت ==========
-let audioCtx, analyser, dataArr, source, micStream;
-const canvas = document.getElementById("wave");
-const ctx = canvas.getContext("2d");
-
-function drawWave(){
-  requestAnimationFrame(drawWave);
-  if(!analyser) return;
-  analyser.getByteTimeDomainData(dataArr);
-  ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height);
-  ctx.strokeStyle="#00ffcc"; ctx.beginPath();
-  let slice = canvas.width/dataArr.length;
-  let x=0;
-  for(let i=0;i<dataArr.length;i++){
-    let y=(dataArr[i]/128)*canvas.height/2;
-    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
-    x+=slice;
-  }
-  ctx.stroke();
+// ========= إضافة ذكر =========
+document.getElementById("addBtn").onclick=function(){
+  const v=document.getElementById("newZikr").value.trim();
+  if(!v) return;
+  zikrData.push(createZikr(v)); document.getElementById("newZikr").value=""; render();
 }
 
-// ========== تشغيل التسجيل ==========
-let isRecording = false;
-let audioChunks = [];
+// ========= التعرف على الصوت =========
+let recognition;
+function initRecognition(){
+  const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SpeechRecognition){ alert("متصفحك لا يدعم التعرف على الصوت."); return; }
+  recognition=new SpeechRecognition();
+  recognition.lang="ar-SA";
+  recognition.continuous=true;
+  recognition.interimResults=true;
 
-document.getElementById("start").onclick = async () => {
-  if(!model) return alert("النموذج لم يكتمل تحميله بعد!");
-  micStream = await navigator.mediaDevices.getUserMedia({audio:true});
-  audioCtx = new AudioContext();
-  source = audioCtx.createMediaStreamSource(micStream);
-  analyser = audioCtx.createAnalyser();
-  analyser.fftSize = 2048;
-  dataArr = new Uint8Array(analyser.fftSize);
-  source.connect(analyser);
-  drawWave();
+  recognition.onresult=function(e){
+    for(let i=0;i<e.results.length;i++){
+      const result=e.results[i];
+      if(!result.isFinal) continue; // ✅ عد فقط النتائج النهائية
+      const text=normalize(result[0].transcript);
+      document.getElementById("heard").textContent="سمعت: "+text;
 
-  statusText.innerText = "جاري التسجيل...";
-  isRecording = true;
-  audioChunks = [];
-
-  const recorder = new MediaRecorder(micStream);
-  recorder.ondataavailable = e => audioChunks.push(e.data);
-  recorder.start();
-
-  recorder.onstop = async () => {
-    const audioBlob = new Blob(audioChunks,{type:"audio/webm"});
-    const arrayBuffer = await audioBlob.arrayBuffer();
-    const result = await model.transcribe(arrayBuffer);
-    const text = result.text.trim();
-    statusText.innerText = "سمعت: "+text;
-
-    // تحديث العدادات
-    zikrData.forEach((z,i)=>{
-      const regex = new RegExp("\\b" + z.text.replace(/[.*+?^${}()|[\\]\/]/g,"\\\\$&") + "\\b","gi");
-      const matches = text.match(regex);
-      if(matches){
-        z.count += matches.length;
-        document.getElementById(`count-${i}`).innerText = z.count;
-        document.getElementById(`card-${i}`).classList.add("flash");
-        setTimeout(()=>document.getElementById(`card-${i}`).classList.remove("flash"),300);
-      }
-    });
-  };
-
-  setTimeout(()=>recorder.stop(),3000); // تسجيل 3 ثواني
-};
-
-document.getElementById("stop").onclick = () => {
-  if(micStream){
-    micStream.getTracks().forEach(t=>t.stop());
-    audioCtx && audioCtx.close();
-    statusText.innerText = "تم الإيقاف";
+      zikrData.forEach((z,j)=>{
+        // === تطابق ذكر كامل بالـ Regex لتجنب العد الزائد ===
+        const regex = new RegExp(`\\b${z.key.replace(/[-\/\\^$*+?.()|[\]{}]/g,'\\$&')}\\b`, "g");
+        const matches = text.match(regex);
+        if(matches){
+          z.total += matches.length;
+          flash(j); renderCount(j);
+        }
+      });
+    }
   }
-};
+
+  recognition.onerror=function(err){ console.log("Error:",err); }
+}
+
+// ========= تنبيه بصري =========
+function flash(i){
+  const c=document.getElementById(`card-${i}`);
+  c.style.background="#d1f5e0"; c.style.transform="scale(1.03)";
+  setTimeout(()=>{ c.style.background="#fff"; c.style.transform="scale(1)"; },300);
+}
+
+// ========= أمواج صوت =========
+let audioCtx, analyser, dataArray, source, stream;
+const canvas=document.getElementById("wave"); const ctx=canvas.getContext("2d");
+async function startWave(){
+  audioCtx=new AudioContext();
+  stream=await navigator.mediaDevices.getUserMedia({audio:{noiseSuppression:true,echoCancellation:true,autoGainControl:true}});
+  source=audioCtx.createMediaStreamSource(stream);
+  analyser=audioCtx.createAnalyser(); analyser.fftSize=2048; dataArray=new Uint8Array(analyser.fftSize); source.connect(analyser); draw();
+}
+function draw(){requestAnimationFrame(draw); analyser.getByteTimeDomainData(dataArray); ctx.fillStyle="#000"; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.strokeStyle="#00ffcc"; ctx.lineWidth=2; ctx.beginPath(); let x=0, slice=canvas.width/dataArray.length; for(let i=0;i<dataArray.length;i++){let y=(dataArray[i]/128)*canvas.height/2; i?ctx.lineTo(x,y):ctx.moveTo(x,y); x+=slice;} ctx.stroke();}
+
+// ========= تحكم =========
+document.getElementById("startBtn").onclick=()=>{
+  initRecognition(); recognition && recognition.start(); startWave();
+}
+document.getElementById("stopBtn").onclick=()=>{
+  recognition && recognition.stop(); stream && stream.getTracks().forEach(t=>t.stop()); audioCtx && audioCtx.close();
+}
 </script>
+
 </body>
 </html>
