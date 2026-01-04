@@ -99,15 +99,23 @@ async function initWhisper(){
           setTimeout(()=>card.classList.remove("flash"),300);
         }
       });
-    },
-    onProgress: (p) => {
-      const percent = Math.floor(p*100);
-      document.getElementById("progressBar").style.width = percent+"%";
-      document.getElementById("status").innerText = "تحميل النموذج: "+percent+"%";
     }
   });
 
+  // ===== شريط تقدم وهمي =====
+  let progress = 0;
+  const progressBar = document.getElementById("progressBar");
+  const fakeProgress = setInterval(()=>{
+    if(progress < 90){
+      progress += Math.random()*3; // زيادة تدريجية عشوائية
+      progressBar.style.width = Math.floor(progress)+"%";
+    }
+  },100);
+
   await transcriber.loadModel(); // تحميل النموذج
+
+  clearInterval(fakeProgress);
+  progressBar.style.width = "100%";
   document.getElementById("status").innerText="جاهز للاستماع 🎤";
   document.getElementById("start").disabled = false;
   document.getElementById("stop").disabled = false;
